@@ -5,7 +5,7 @@ A Spring Boot 3 application for tracking expenses with PostgreSQL and MongoDB su
 ## Technologies
 
 - **Spring Boot 3.2.1**
-- **Java 17**
+- **Java 21** (LTS)
 - **Maven**
 - **PostgreSQL** (Primary database)
 - **MongoDB** (Logging/Analytics)
@@ -53,7 +53,7 @@ expense-tracker/
 
 ## Prerequisites
 
-- Java 17 or higher
+- Java 21 (LTS) or higher
 - Maven 3.6+
 - PostgreSQL 12+
 - MongoDB 4.4+ (optional)
