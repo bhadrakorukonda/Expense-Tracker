@@ -11,11 +11,13 @@ import com.expense.tracker.model.User;
 import com.expense.tracker.repository.CategoryRepository;
 import com.expense.tracker.repository.ExpenseRepository;
 import com.expense.tracker.repository.UserRepository;
+import com.expense.tracker.repository.specification.ExpenseSpecification;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -153,7 +155,7 @@ public class ExpenseService {
     }
 
     /**
-     * Search expenses with multiple filters and pagination
+     * Search expenses with multiple filters and pagination using JPA Specifications
      *
      * @param userId the ID of the user
      * @param fromDate optional start date filter
@@ -161,6 +163,9 @@ public class ExpenseService {
      * @param categoryId optional category filter
      * @param minAmount optional minimum amount filter
      * @param maxAmount optional maximum amount filter
+     * @param searchText optional text search (searches description, tags, category name)
+     * @param currency optional currency filter
+     * @param tag optional tag filter
      * @param pageable pagination information
      * @return page of matching expenses
      */
@@ -171,10 +176,14 @@ public class ExpenseService {
             Optional<Long> categoryId,
             Optional<BigDecimal> minAmount,
             Optional<BigDecimal> maxAmount,
+            Optional<String> searchText,
+            Optional<String> currency,
+            Optional<String> tag,
             Pageable pageable) {
         
-        log.debug("Searching expenses for user ID: {} with filters - fromDate: {}, toDate: {}, categoryId: {}, minAmount: {}, maxAmount: {}",
-                userId, fromDate, toDate, categoryId, minAmount, maxAmount);
+        log.debug("Searching expenses for user ID: {} with filters - fromDate: {}, toDate: {}, categoryId: {}, " +
+                "minAmount: {}, maxAmount: {}, searchText: {}, currency: {}, tag: {}",
+                userId, fromDate, toDate, categoryId, minAmount, maxAmount, searchText, currency, tag);
         
         // Validate user exists
         if (!userRepository.existsById(userId)) {
@@ -201,15 +210,45 @@ public class ExpenseService {
             throw new IllegalArgumentException("Minimum amount cannot be greater than maximum amount");
         }
         
-        // Apply filters and fetch expenses
-        Page<Expense> expenses = findExpensesWithFilters(userId, fromDate, toDate, categoryId, minAmount, maxAmount, pageable);
+        // Build dynamic specification
+        Specification<Expense> specification = ExpenseSpecification.buildSpecification(
+                userId,
+                fromDate.orElse(null),
+                toDate.orElse(null),
+                categoryId.orElse(null),
+                minAmount.orElse(null),
+                maxAmount.orElse(null),
+                searchText.orElse(null),
+                currency.orElse(null),
+                tag.orElse(null)
+        );
+        
+        // Apply specification and fetch expenses
+        Page<Expense> expenses = expenseRepository.findAll(specification, pageable);
         
         return expenses.map(entityMapper::toExpenseResponseDto);
     }
 
     /**
-     * Helper method to find expenses with various filters
+     * Search expenses with multiple filters (backward compatibility method)
      */
+    public Page<ExpenseResponseDto> searchExpenses(
+            Long userId,
+            Optional<LocalDate> fromDate,
+            Optional<LocalDate> toDate,
+            Optional<Long> categoryId,
+            Optional<BigDecimal> minAmount,
+            Optional<BigDecimal> maxAmount,
+            Pageable pageable) {
+        
+        return searchExpenses(userId, fromDate, toDate, categoryId, minAmount, maxAmount, 
+                Optional.empty(), Optional.empty(), Optional.empty(), pageable);
+    }
+
+    /**
+     * Helper method to find expenses with various filters (deprecated - using Specifications now)
+     */
+    @Deprecated
     private Page<Expense> findExpensesWithFilters(
             Long userId,
             Optional<LocalDate> fromDate,
