@@ -1,10 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import CreateExpensePage from './pages/CreateExpensePage';
+import Dashboard from './pages/Dashboard';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <CreateExpensePage />
+    <Dashboard />
   </React.StrictMode>
 );
