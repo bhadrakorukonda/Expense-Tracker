@@ -175,4 +175,31 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long>, JpaSpec
      * @param categoryId the category ID
      */
     void deleteByCategoryId(Long categoryId);
+
+    /**
+     * Get monthly expense totals for a specific year
+     * @param userId the user ID
+     * @param year the year
+     * @return list of monthly totals with year, month, total, and count
+     */
+    @Query("SELECT YEAR(e.date) as year, MONTH(e.date) as month, SUM(e.amount) as total, COUNT(e) as count, e.currency " +
+           "FROM Expense e " +
+           "WHERE e.user.id = :userId AND YEAR(e.date) = :year " +
+           "GROUP BY YEAR(e.date), MONTH(e.date), e.currency " +
+           "ORDER BY MONTH(e.date)")
+    List<Object[]> getMonthlyTotals(@Param("userId") Long userId, @Param("year") Integer year);
+
+    /**
+     * Get category expense totals within date range
+     * @param userId the user ID
+     * @param startDate the start date (inclusive)
+     * @param endDate the end date (inclusive)
+     * @return list of category totals with category details, total, and count
+     */
+    @Query("SELECT e.category.id, e.category.name, e.category.color, e.category.icon, SUM(e.amount) as total, COUNT(e) as count " +
+           "FROM Expense e " +
+           "WHERE e.user.id = :userId AND e.date BETWEEN :startDate AND :endDate " +
+           "GROUP BY e.category.id, e.category.name, e.category.color, e.category.icon " +
+           "ORDER BY total DESC")
+    List<Object[]> getCategoryTotals(@Param("userId") Long userId, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
 }

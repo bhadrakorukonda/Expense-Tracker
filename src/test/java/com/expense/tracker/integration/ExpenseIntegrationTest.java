@@ -92,18 +92,14 @@ class ExpenseIntegrationTest {
 
         // Create test user
         testUser = new User();
-        testUser.setUsername("testuser");
+        testUser.setName("Test User");
         testUser.setEmail("test@example.com");
         testUser.setPassword(passwordEncoder.encode("password"));
-        testUser.setEnabled(true);
         testUser = userRepository.save(testUser);
 
         // Create test category
         testCategory = new Category();
         testCategory.setName("Food & Dining");
-        testCategory.setDescription("Food and dining expenses");
-        testCategory.setColor("#FF5733");
-        testCategory.setIcon("🍔");
         testCategory.setUser(testUser);
         testCategory = categoryRepository.save(testCategory);
     }
@@ -201,9 +197,6 @@ class ExpenseIntegrationTest {
         // Given - Create another category
         Category transportCategory = new Category();
         transportCategory.setName("Transport");
-        transportCategory.setDescription("Transportation expenses");
-        transportCategory.setColor("#3498DB");
-        transportCategory.setIcon("🚗");
         transportCategory.setUser(testUser);
         transportCategory = categoryRepository.save(transportCategory);
 

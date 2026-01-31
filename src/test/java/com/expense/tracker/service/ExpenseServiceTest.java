@@ -64,7 +64,7 @@ class ExpenseServiceTest {
         // Create test user
         testUser = new User();
         testUser.setId(1L);
-        testUser.setUsername("testuser");
+        testUser.setName("Test User");
         testUser.setEmail("test@example.com");
         testUser.setPassword("password");
 
@@ -180,7 +180,7 @@ class ExpenseServiceTest {
             // Arrange
             User anotherUser = new User();
             anotherUser.setId(2L);
-            anotherUser.setUsername("another");
+            anotherUser.setName("Another User");
             anotherUser.setEmail("another@example.com");
 
             Category anotherCategory = new Category();

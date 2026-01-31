@@ -1,8 +1,10 @@
 package com.expense.tracker.service;
 
+import com.expense.tracker.dto.CategoryReportDto;
 import com.expense.tracker.dto.ExpenseCreateDto;
 import com.expense.tracker.dto.ExpenseResponseDto;
 import com.expense.tracker.dto.ExpenseUpdateDto;
+import com.expense.tracker.dto.MonthlyReportDto;
 import com.expense.tracker.exception.ResourceNotFoundException;
 import com.expense.tracker.mapper.EntityMapper;
 import com.expense.tracker.model.Category;
@@ -23,8 +25,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Service for managing expenses
@@ -362,5 +367,91 @@ public class ExpenseService {
         
         BigDecimal total = expenseRepository.sumAmountByUserIdAndCategoryId(userId, categoryId);
         return total != null ? total : BigDecimal.ZERO;
+    }
+
+    /**
+     * Get monthly expense report for a specific year
+     *
+     * @param userId the user ID
+     * @param year the year
+     * @return list of monthly totals
+     */
+    public List<MonthlyReportDto> getMonthlyReport(Long userId, Integer year) {
+        log.debug("Generating monthly report for user ID: {} and year: {}", userId, year);
+        
+        if (!userRepository.existsById(userId)) {
+            throw new ResourceNotFoundException("User", "id", userId);
+        }
+        
+        if (year == null || year < 1900 || year > 2100) {
+            throw new IllegalArgumentException("Invalid year provided");
+        }
+        
+        List<Object[]> results = expenseRepository.getMonthlyTotals(userId, year);
+        
+        return results.stream()
+                .map(row -> new MonthlyReportDto(
+                        (Integer) row[0],  // year
+                        (Integer) row[1],  // month
+                        (BigDecimal) row[2], // total
+                        (Long) row[3],     // count
+                        (String) row[4]    // currency
+                ))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Get category expense report within date range
+     *
+     * @param userId the user ID
+     * @param startDate the start date
+     * @param endDate the end date
+     * @return list of category totals with percentages
+     */
+    public List<CategoryReportDto> getCategoryReport(Long userId, LocalDate startDate, LocalDate endDate) {
+        log.debug("Generating category report for user ID: {} from {} to {}", userId, startDate, endDate);
+        
+        if (!userRepository.existsById(userId)) {
+            throw new ResourceNotFoundException("User", "id", userId);
+        }
+        
+        if (startDate.isAfter(endDate)) {
+            throw new IllegalArgumentException("Start date cannot be after end date");
+        }
+        
+        List<Object[]> results = expenseRepository.getCategoryTotals(userId, startDate, endDate);
+        
+        // Calculate grand total for percentage calculations
+        BigDecimal grandTotal = results.stream()
+                .map(row -> (BigDecimal) row[4])
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        return results.stream()
+                .map(row -> {
+                    Long categoryId = (Long) row[0];
+                    String categoryName = (String) row[1];
+                    String categoryColor = (String) row[2];
+                    String categoryIcon = (String) row[3];
+                    BigDecimal total = (BigDecimal) row[4];
+                    Long count = (Long) row[5];
+                    
+                    // Calculate percentage
+                    Double percentage = grandTotal.compareTo(BigDecimal.ZERO) > 0
+                            ? total.divide(grandTotal, 4, RoundingMode.HALF_UP)
+                                   .multiply(BigDecimal.valueOf(100))
+                                   .doubleValue()
+                            : 0.0;
+                    
+                    return new CategoryReportDto(
+                            categoryId,
+                            categoryName,
+                            categoryColor,
+                            categoryIcon,
+                            total,
+                            count,
+                            percentage
+                    );
+                })
+                .collect(Collectors.toList());
     }
 }
