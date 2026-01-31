@@ -24,12 +24,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
+import java.io.IOException;
+import java.io.Writer;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Service for managing expenses
@@ -453,5 +456,118 @@ public class ExpenseService {
                     );
                 })
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Export expenses to CSV with streaming for memory efficiency
+     * Uses the same filtering logic as searchExpenses
+     *
+     * @param writer the Writer to write CSV data to
+     * @param userId the ID of the user
+     * @param fromDate optional start date filter
+     * @param toDate optional end date filter
+     * @param categoryId optional category filter
+     * @param minAmount optional minimum amount filter
+     * @param maxAmount optional maximum amount filter
+     * @param searchText optional text search
+     * @param currency optional currency filter
+     * @param tag optional tag filter
+     * @throws IOException if writing fails
+     */
+    public void exportExpensesToCsv(
+            Writer writer,
+            Long userId,
+            Optional<LocalDate> fromDate,
+            Optional<LocalDate> toDate,
+            Optional<Long> categoryId,
+            Optional<BigDecimal> minAmount,
+            Optional<BigDecimal> maxAmount,
+            Optional<String> searchText,
+            Optional<String> currency,
+            Optional<String> tag) throws IOException {
+        
+        log.info("Exporting expenses to CSV for user ID: {}", userId);
+        
+        // Validate user exists
+        if (!userRepository.existsById(userId)) {
+            throw new ResourceNotFoundException("User", "id", userId);
+        }
+        
+        // Validate category belongs to user if specified
+        if (categoryId.isPresent()) {
+            Category category = categoryRepository.findById(categoryId.get())
+                    .orElseThrow(() -> new ResourceNotFoundException("Category", "id", categoryId.get()));
+            if (!category.getUser().getId().equals(userId)) {
+                throw new IllegalArgumentException("Category does not belong to the user");
+            }
+        }
+        
+        // Build specification with same filters as search
+        Specification<Expense> spec = ExpenseSpecification.buildSpecification(
+                userId,
+                fromDate.orElse(null),
+                toDate.orElse(null),
+                categoryId.orElse(null),
+                minAmount.orElse(null),
+                maxAmount.orElse(null),
+                searchText.orElse(null),
+                currency.orElse(null),
+                tag.orElse(null)
+        );
+        
+        // Write CSV header
+        writer.write("ID,Date,Amount,Currency,Category,Description,Tags,Receipt ID,Created At\n");
+        
+        // Stream expenses to avoid loading all into memory
+        try (Stream<Expense> expenseStream = expenseRepository.findAll(spec).stream()) {
+            expenseStream.forEach(expense -> {
+                try {
+                    // Escape CSV values (handle commas, quotes, newlines)
+                    String id = String.valueOf(expense.getId());
+                    String date = expense.getDate().toString();
+                    String amount = expense.getAmount().toString();
+                    String currencyValue = escapeCsv(expense.getCurrency());
+                    String category = expense.getCategory() != null ? 
+                            escapeCsv(expense.getCategory().getName()) : "";
+                    String description = expense.getDescription() != null ? 
+                            escapeCsv(expense.getDescription()) : "";
+                    String tags = expense.getTags() != null && !expense.getTags().isEmpty() ? 
+                            escapeCsv(String.join("|", expense.getTags())) : "";
+                    String receiptId = expense.getReceiptMongoId() != null ? 
+                            escapeCsv(expense.getReceiptMongoId()) : "";
+                    String createdAt = expense.getCreatedAt().toString();
+                    
+                    writer.write(String.format("%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
+                            id, date, amount, currencyValue, category, description, tags, receiptId, createdAt));
+                    
+                } catch (IOException e) {
+                    throw new RuntimeException("Error writing CSV row", e);
+                }
+            });
+        }
+        
+        writer.flush();
+        log.info("CSV export completed for user ID: {}", userId);
+    }
+    
+    /**
+     * Escape CSV field value according to RFC 4180
+     * Wraps in quotes if contains comma, quote, or newline
+     * Escapes quotes by doubling them
+     */
+    private String escapeCsv(String value) {
+        if (value == null) {
+            return "";
+        }
+        
+        // Check if value needs escaping
+        if (value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")) {
+            // Escape quotes by doubling them
+            String escaped = value.replace("\"", "\"\"");
+            // Wrap in quotes
+            return "\"" + escaped + "\"";
+        }
+        
+        return value;
     }
 }

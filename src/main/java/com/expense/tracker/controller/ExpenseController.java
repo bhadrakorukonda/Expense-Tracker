@@ -17,9 +17,16 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -321,5 +328,97 @@ public class ExpenseController {
         
         BigDecimal total = expenseService.getTotalExpensesByUserIdAndCategory(userId, categoryId);
         return ResponseEntity.ok(total);
+    }
+
+    /**
+     * Export expenses to CSV with optional filters
+     * Uses streaming for memory efficiency
+     *
+     * @param userId the user ID
+     * @param fromDate optional start date filter
+     * @param toDate optional end date filter
+     * @param categoryId optional category ID filter
+     * @param minAmount optional minimum amount filter
+     * @param maxAmount optional maximum amount filter
+     * @param q optional search text
+     * @param currency optional currency filter
+     * @param tag optional tag filter
+     * @return CSV file as streaming response
+     */
+    @GetMapping(value = "/export/csv", produces = "text/csv")
+    @Operation(summary = "Export expenses to CSV", 
+               description = "Exports filtered expenses to CSV file with streaming for memory efficiency. " +
+                           "Supports all the same filters as the search endpoint.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "CSV file generated successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid filter parameters"),
+            @ApiResponse(responseCode = "404", description = "User not found")
+    })
+    public ResponseEntity<StreamingResponseBody> exportExpensesToCsv(
+            @Parameter(description = "User ID", required = true)
+            @PathVariable Long userId,
+            
+            @Parameter(description = "Start date (inclusive)")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            
+            @Parameter(description = "End date (inclusive)")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            
+            @Parameter(description = "Category ID")
+            @RequestParam(required = false) Long categoryId,
+            
+            @Parameter(description = "Minimum amount")
+            @RequestParam(required = false) BigDecimal minAmount,
+            
+            @Parameter(description = "Maximum amount")
+            @RequestParam(required = false) BigDecimal maxAmount,
+            
+            @Parameter(description = "Search text (searches description, category name, tags)")
+            @RequestParam(required = false) String q,
+            
+            @Parameter(description = "Currency code (e.g., USD, EUR)")
+            @RequestParam(required = false) String currency,
+            
+            @Parameter(description = "Tag to filter by")
+            @RequestParam(required = false) String tag) {
+        
+        log.info("GET /api/v1/users/{}/expenses/export/csv - Exporting expenses", userId);
+        log.debug("Export filters - fromDate: {}, toDate: {}, categoryId: {}, minAmount: {}, maxAmount: {}, " +
+                "q: {}, currency: {}, tag: {}",
+                fromDate, toDate, categoryId, minAmount, maxAmount, q, currency, tag);
+        
+        // Create streaming response body
+        StreamingResponseBody stream = outputStream -> {
+            try (Writer writer = new OutputStreamWriter(outputStream, StandardCharsets.UTF_8)) {
+                expenseService.exportExpensesToCsv(
+                        writer,
+                        userId,
+                        Optional.ofNullable(fromDate),
+                        Optional.ofNullable(toDate),
+                        Optional.ofNullable(categoryId),
+                        Optional.ofNullable(minAmount),
+                        Optional.ofNullable(maxAmount),
+                        Optional.ofNullable(q),
+                        Optional.ofNullable(currency),
+                        Optional.ofNullable(tag)
+                );
+            }
+        };
+        
+        // Generate filename with timestamp
+        String timestamp = LocalDate.now().toString();
+        String filename = String.format("expenses_%s_%s.csv", userId, timestamp);
+        
+        // Set headers for CSV download
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("text/csv"));
+        headers.set(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"");
+        headers.setCacheControl("no-cache, no-store, must-revalidate");
+        headers.setPragma("no-cache");
+        headers.setExpires(0);
+        
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(stream);
     }
 }
