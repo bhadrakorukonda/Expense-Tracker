@@ -81,6 +81,49 @@ CREATE DATABASE expense_tracker;
 
 2. Flyway will automatically run migrations on startup
 
+## Development Mode with Sample Data
+
+The application includes a data seeder that creates sample users, categories, and expenses for local development.
+
+### Enable Data Seeding
+
+1. **Option 1**: Uncomment the profile in `application.properties`:
+```properties
+spring.profiles.active=dev
+```
+
+2. **Option 2**: Pass as command line argument:
+```bash
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
+```
+
+3. **Option 3**: Set environment variable:
+```bash
+export SPRING_PROFILES_ACTIVE=dev
+mvn spring-boot:run
+```
+
+### Sample Data Created
+
+When the `dev` profile is active and the database is empty, the seeder will create:
+
+- **3 test users** with credentials:
+  - `john.doe@example.com` / `password123`
+  - `jane.smith@example.com` / `password123`
+  - `bob.wilson@example.com` / `password123`
+
+- **8-12 categories per user** (randomly selected from 15 types)
+  - Food & Dining, Groceries, Transportation, Shopping, Entertainment, etc.
+
+- **50-100 expenses per user** with:
+  - Random amounts between $5 and $500
+  - Dates spread across the last 90 days
+  - Realistic descriptions matching category types
+  - Multiple currencies (USD, EUR, GBP, CAD, AUD)
+  - Random tags (essential, recurring, one-time, etc.)
+
+**Note**: The seeder only runs once. If data exists, it will be skipped. To re-seed, drop and recreate the database.
+
 ## Build and Run
 
 ### Build the project:
